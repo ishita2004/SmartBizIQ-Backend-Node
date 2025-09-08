@@ -7,7 +7,6 @@ import fs from "fs";
 import path from "path";
 import csv from "csv-parser";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-
 import { fileURLToPath } from "url";
 
 const app = express();
@@ -19,7 +18,9 @@ const __dirname = path.dirname(__filename);
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(fileUpload());
+app.use(fileUpload({
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
+}));
 
 // -------------------- Check API Key --------------------
 if (!process.env.GEMINI_API_KEY) {
@@ -29,9 +30,13 @@ if (!process.env.GEMINI_API_KEY) {
 
 const ai = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-
 // -------------------- CSV Storage --------------------
 let csvData = []; // memory storage for parsed CSV
+
+// -------------------- Root health route --------------------
+app.get("/", (req, res) => {
+  res.send("✅ SmartBizIQ backend is running!");
+});
 
 // -------------------- Upload CSV --------------------
 app.post("/upload", async (req, res) => {
@@ -41,6 +46,12 @@ app.post("/upload", async (req, res) => {
     }
 
     const csvFile = req.files.file;
+
+    // Only allow CSV files
+    if (!csvFile.name.endsWith(".csv")) {
+      return res.status(400).json({ detail: "Only CSV files are allowed." });
+    }
+
     const uploadDir = path.join(__dirname, "uploads");
     const uploadPath = path.join(uploadDir, csvFile.name);
 
@@ -76,19 +87,22 @@ app.post("/chat", async (req, res) => {
     const { user_query } = req.body;
     if (!user_query) return res.status(400).json({ detail: "Query is required" });
 
-    // Limit CSV preview
+    // Format CSV preview for AI
     const csvPreview = csvData.length > 0
-      ? `CSV Data (first 50 rows):\n${JSON.stringify(csvData.slice(0, 50))}`
+      ? csvData.slice(0, 10).map(row =>
+          Object.entries(row).map(([k, v]) => `${k}: ${v}`).join(", ")
+        ).join("\n")
       : "No CSV uploaded yet.";
 
     const prompt = `
-You are a business analytics assistant. Use the CSV data to answer user queries.
+You are a business analytics assistant. Use the CSV data below to answer user queries.
+
+CSV Preview (first 10 rows):
 ${csvPreview}
 
 User question: ${user_query}
 `;
 
-    // ✅ Use ai instead of genAI
     const model = ai.getGenerativeModel({ model: "gemini-2.0-flash" });
     const result = await model.generateContent(prompt);
 
@@ -98,4 +112,9 @@ User question: ${user_query}
     console.error("❌ Error in /chat:", err);
     res.status(500).json({ detail: "Failed to get AI response", error: err.message });
   }
+});
+
+// -------------------- Start Server --------------------
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
 });
