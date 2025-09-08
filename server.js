@@ -6,7 +6,8 @@ import cors from "cors";
 import fs from "fs";
 import path from "path";
 import csv from "csv-parser";
-import { GoogleGenerativeAI } from "@google/generative-ai"; // ✅ correct package import
+import { GoogleGenerativeAI } from "@google/generative-ai";
+
 import { fileURLToPath } from "url";
 
 const app = express();
@@ -26,8 +27,8 @@ if (!process.env.GEMINI_API_KEY) {
   process.exit(1);
 }
 
-// -------------------- Initialize Gemini AI --------------------
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const ai = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
 
 // -------------------- CSV Storage --------------------
 let csvData = []; // memory storage for parsed CSV
@@ -87,8 +88,8 @@ ${csvPreview}
 User question: ${user_query}
 `;
 
-    // Call Gemini API
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    // ✅ Use ai instead of genAI
+    const model = ai.getGenerativeModel({ model: "gemini-2.0-flash" });
     const result = await model.generateContent(prompt);
 
     res.json({ answer: result.response.text() });
@@ -97,14 +98,4 @@ User question: ${user_query}
     console.error("❌ Error in /chat:", err);
     res.status(500).json({ detail: "Failed to get AI response", error: err.message });
   }
-});
-
-// -------------------- Root Health Check --------------------
-app.get("/", (req, res) => {
-  res.send("✅ SmartBizIQ Backend is running...");
-});
-
-// -------------------- Start server --------------------
-app.listen(PORT, () => {
-  console.log(`🚀 Server running at http://localhost:${PORT}`);
 });
